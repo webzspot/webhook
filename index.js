@@ -23,7 +23,7 @@ const razorpay = new Razorpay({
 });
 
 // Route to create an order
-app.post("/order", async (req, res) => {
+app.post("/order-ecom", async (req, res) => {
     try {
         const { name, phoneNumber, amount } = req.body;
 
@@ -34,6 +34,31 @@ app.post("/order", async (req, res) => {
 
         // Store temporary order details in database
         await prisma.temporaryOrder.create({
+            data: {
+                order_id: order.id,
+                name,
+                phoneNumber,
+                amount: (order.amount / 100).toString(), // Store amount in rupees
+            },
+        });
+
+        res.status(200).json({ order });
+    } catch (error) {
+        console.error("Error creating order:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+app.post("/order-session", async (req, res) => {
+    try {
+        const { name, phoneNumber, amount } = req.body;
+
+        const order = await razorpay.orders.create({
+            amount: amount * 100, // Amount in paise (multiply by 100)
+            currency: "INR",
+        });
+
+        // Store temporary order details in database
+        await prisma.temporaryOrderSession.create({
             data: {
                 order_id: order.id,
                 name,
@@ -78,12 +103,28 @@ app.post("/razorpay-webhook", async (req, res) => {
                     const orderDetails = await prisma.temporaryOrder.findUnique({
                         where: { order_id: orderId },
                     });
+                    const orderDetailsSession = await prisma.temporaryOrderSession.findUnique({
+                        where: { order_id: orderId },
+                    });
 
                     if (!orderDetails) {
                         return res.status(404).json({ error: "Temporary order not found" });
                     }
+                    if (!orderDetailsSession) {
+                        return res.status(404).json({ error: "Temporary order not found" });
+                    }
 
                     // Move data to permanentOrder and delete from temporaryOrder
+                    await prisma.permanentOrderSession.create({
+                        data: {
+                            order_id: orderId,
+                            payment_id: paymentId,
+                            name: orderDetails.name,
+                            phoneNumber: orderDetails.phoneNumber,
+                            amount: orderDetails.amount,
+                        },
+                    });
+                    
                     await prisma.permanentOrder.create({
                         data: {
                             order_id: orderId,
@@ -94,7 +135,12 @@ app.post("/razorpay-webhook", async (req, res) => {
                         },
                     });
 
+
                     await prisma.temporaryOrder.delete({
+                        where: { order_id: orderId },
+                    });
+
+                    await prisma.temporaryOrderSession.delete({
                         where: { order_id: orderId },
                     });
 
