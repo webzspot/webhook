@@ -16,6 +16,7 @@ app.use(express.json({
     }
 }));
 
+
 // Razorpay instance
 const razorpay = new Razorpay({
     key_id: "rzp_test_qUePsQvwKUdYCu",
@@ -99,11 +100,16 @@ app.post("/order", async (req, res) => {
 
 
 app.post('/razorpay-webhook', async (req, res) => {
-    const webhookBody = req.rawBody; // Use rawBody middleware to capture raw body
+    const webhookBody = req.rawBody;
+    console.log('Webhook Body:', webhookBody);  // Log the raw body for debugging
     const webhookSignature = req.headers['x-razorpay-signature'];
     const webhookSecret = "zncIffQV4BBNSDBpfS2IKBy7";
 
     try {
+        if (!webhookBody) {
+            return res.status(400).send('No raw body found');
+        }
+
         // Validate webhook signature using crypto
         const expectedSignature = crypto
             .createHmac('sha256', webhookSecret)
@@ -112,7 +118,6 @@ app.post('/razorpay-webhook', async (req, res) => {
 
         if (expectedSignature === webhookSignature) {
             const event = JSON.parse(webhookBody);
-            
             switch (event.event) {
                 case 'payment.captured':
                     const paymentDetails = event.payload.payment.entity;
@@ -159,6 +164,7 @@ app.post('/razorpay-webhook', async (req, res) => {
         return res.status(500).send('Internal server error');
     }
 });
+
 
 // Start the server
 app.listen(8001, () => {
