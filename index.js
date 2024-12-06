@@ -6,13 +6,14 @@ const { PrismaClient } = require("@prisma/client");
 const crypto = require('crypto');
 const app = express();
 const prisma = new PrismaClient();
+ // Logs incoming request
 
 app.use(express.json());
 app.use(cors());
 
 app.use(express.json({
     verify: (req, _res, buf) => {
-        req.rawBody = buf.toString(); // Store raw body as a string
+        req.rawBody = buf.toString(); // Capture the raw body as a string
     }
 }));
 
@@ -100,8 +101,10 @@ app.post("/order", async (req, res) => {
 
 
 app.post('/razorpay-webhook', async (req, res) => {
+    console.log('Request Body:', req.body);  // Log the parsed body
+    console.log('Raw Body:', req.rawBody);  // Log the raw body
+
     const webhookBody = req.rawBody;
-    console.log('Webhook Body:', webhookBody);  // Log the raw body for debugging
     const webhookSignature = req.headers['x-razorpay-signature'];
     const webhookSecret = "zncIffQV4BBNSDBpfS2IKBy7";
 
@@ -120,38 +123,11 @@ app.post('/razorpay-webhook', async (req, res) => {
             const event = JSON.parse(webhookBody);
             switch (event.event) {
                 case 'payment.captured':
-                    const paymentDetails = event.payload.payment.entity;
-                    const orderId = paymentDetails.order_id;
-                    const paymentId = paymentDetails.id;
-
-                    const orderDetails = await prisma.temporaryOrder.findUnique({
-                        where: { order_id: orderId },
-                    });
-
-                    if (!orderDetails) {
-                        return res.status(404).json({ error: "Temporary order not found" });
-                    }
-
-                    await prisma.permanentOrder.create({
-                        data: {
-                            order_id: orderId,
-                            payment_id: paymentId,
-                            name: orderDetails.name,
-                            phoneNumber: orderDetails.phoneNumber,
-                            amount: orderDetails.amount,
-                        },
-                    });
-
-                    await prisma.temporaryOrder.delete({
-                        where: { order_id: orderId },
-                    });
-
-                    return res.status(200).json({ message: "Payment Verified" });
-
+                    // Handle payment captured
+                    break;
                 case 'payment.failed':
-                    console.log('Payment failed:', event.payload.payment.entity);
-                    return res.status(200).send('Payment failed event logged');
-
+                    // Handle payment failed
+                    break;
                 default:
                     console.log('Unhandled event:', event.event);
                     return res.status(200).send('Unhandled event');
@@ -164,6 +140,7 @@ app.post('/razorpay-webhook', async (req, res) => {
         return res.status(500).send('Internal server error');
     }
 });
+
 
 
 // Start the server
