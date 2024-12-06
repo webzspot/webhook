@@ -99,16 +99,22 @@ app.post("/order", async (req, res) => {
 // Webhook to handle Razorpay payment events
 
 
+// Webhook to handle Razorpay payment events
 app.post('/razorpay-webhook', async (req, res) => {
     const webhookBody = req.rawBody; // Use rawBody middleware to capture raw body
     const webhookSignature = req.headers['x-razorpay-signature'];
     const webhookSecret = "zncIffQV4BBNSDBpfS2IKBy7";
 
+    if (!webhookBody) {
+        console.error('Webhook body is empty or undefined');
+        return res.status(400).send('Invalid request body');
+    }
+
     try {
         // Validate webhook signature using crypto
         const expectedSignature = crypto
             .createHmac('sha256', webhookSecret)
-            .update(webhookBody)
+            .update(webhookBody) // Ensure webhookBody is a string or Buffer
             .digest('hex');
 
         if (expectedSignature === webhookSignature) {
