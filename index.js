@@ -110,8 +110,11 @@ app.post("/razorpay-webhook", async (req, res) => {
                     where: { order_id: orderId },
                 });
 
+                
                 const sessionOrder = await prisma.sessionTempOrder.findUnique({
                     where: { order_id: orderId },
+                }).catch((error) => {
+                    console.error("Error fetching session order:", error);
                 });
 
                 if (!orderDetails && !sessionOrder) {
@@ -120,15 +123,19 @@ app.post("/razorpay-webhook", async (req, res) => {
 
                 if (orderDetails) {
                     // Move regular order to permanent storage
-                    await prisma.permanentOrder.create({
+                    await prisma.sessionPermanentOrder.create({
                         data: {
                             order_id: orderId,
                             payment_id: paymentId,
-                            name: orderDetails.name,
-                            phoneNumber: orderDetails.phoneNumber,
-                            amount: orderDetails.amount,
+                            name: sessionOrder.name,
+                            phoneNumber: sessionOrder.phoneNumber,
+                            email: sessionOrder.email,
+                            amount: sessionOrder.amount,
                         },
+                    }).catch((error) => {
+                        console.error("Error creating session permanent order:", error);
                     });
+                   
 
                     await prisma.temporaryOrder.delete({
                         where: { order_id: orderId },
