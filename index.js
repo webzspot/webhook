@@ -76,7 +76,7 @@ app.post("/order-session", async (req, res) => {
 
 // Webhook route to handle Razorpay payment events
 app.post("/razorpay-webhook", async (req, res) => {
-    const webhookSecret = "zncIffQV4BBNSDBpfS2IKBy7"; // Your Razorpay webhook secret
+    const webhookSecret = "zncIffQV4BBNSDBpfS2IKBy7"; // Razorpay webhook secret
     const webhookBody = req.rawBody;
     const webhookSignature = req.headers["x-razorpay-signature"];
 
@@ -97,6 +97,8 @@ app.post("/razorpay-webhook", async (req, res) => {
 
         const event = JSON.parse(webhookBody);
 
+        console.log("Webhook event received:", event); // Log the received event
+
         // Handle specific Razorpay events
         switch (event.event) {
             case "payment.captured":
@@ -113,14 +115,15 @@ app.post("/razorpay-webhook", async (req, res) => {
                 });
 
                 if (!orderDetails && !orderDetailsSession) {
-                    return res.status(404).json({ error: "Temporary order not found" });
+                    console.error("No matching temporary order or session found for order_id:", orderId);
+                    return res.status(404).json({ error: "Temporary order or session not found" });
                 }
 
                 // Use transaction to ensure atomic operations
-                await prisma.$transaction(async (prisma) => {
+                await prisma.$transaction(async (tx) => {
                     // If temporary order exists, move it to permanentOrder
                     if (orderDetails) {
-                        await prisma.permanentOrder.create({
+                        await tx.permanentOrder.create({
                             data: {
                                 order_id: orderId,
                                 payment_id: paymentId,
@@ -130,14 +133,14 @@ app.post("/razorpay-webhook", async (req, res) => {
                             },
                         });
 
-                        await prisma.temporaryOrder.delete({
+                        await tx.temporaryOrder.delete({
                             where: { order_id: orderId },
                         });
                     }
 
                     // If temporary order session exists, move it to permanentOrderSession
                     if (orderDetailsSession) {
-                        await prisma.permanentOrderSession.create({
+                        await tx.permanentOrderSession.create({
                             data: {
                                 order_id: orderId,
                                 payment_id: paymentId,
@@ -147,7 +150,7 @@ app.post("/razorpay-webhook", async (req, res) => {
                             },
                         });
 
-                        await prisma.temporaryOrderSession.delete({
+                        await tx.temporaryOrderSession.delete({
                             where: { order_id: orderId },
                         });
                     }
