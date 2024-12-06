@@ -1,17 +1,16 @@
 const express = require("express");
 const Razorpay = require("razorpay");
 const cors = require("cors");
-const { validatePaymentVerification } = require("razorpay/dist/utils/razorpay-utils");
-const { PrismaClient } = require("@prisma/client");
 const crypto = require("crypto");
+const { PrismaClient } = require("@prisma/client");
 
 const app = express();
 const prisma = new PrismaClient();
 
-// Middleware to handle JSON and capture raw body for webhook verification
+// Middleware to handle JSON and raw body for webhook verification
 app.use(cors());
 app.use(express.json({
-    verify: (req, res, buf) => {
+    verify: (req, _res, buf) => {
         req.rawBody = buf.toString(); // Capture raw body for webhook signature validation
     }
 }));
@@ -22,7 +21,7 @@ const razorpay = new Razorpay({
     key_secret: "zncIffQV4BBNSDBpfS2IKBy7", // Replace with your Razorpay secret key
 });
 
-// Route to create an order
+// Route to create a regular order
 app.post("/order", async (req, res) => {
     try {
         const { name, phoneNumber, amount } = req.body;
@@ -49,9 +48,37 @@ app.post("/order", async (req, res) => {
     }
 });
 
-// Webhook route to handle Razorpay payment events
+// Route to create a session order
+app.post("/session", async (req, res) => {
+    try {
+        const { name, phoneNumber, amount, email } = req.body;
+
+        const order = await razorpay.orders.create({
+            amount: amount * 100, // Amount in paise (multiply by 100)
+            currency: "INR",
+        });
+
+        // Store temporary session order details in the database
+        await prisma.sessionTempOrder.create({
+            data: {
+                order_id: order.id,
+                name,
+                phoneNumber,
+                email,
+                amount: (order.amount / 100).toString(), // Store amount in rupees
+            },
+        });
+
+        res.status(200).json({ order });
+    } catch (error) {
+        console.error("Error creating session order:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+// Razorpay webhook to handle payment events
 app.post("/razorpay-webhook", async (req, res) => {
-    const webhookSecret = "zncIffQV4BBNSDBpfS2IKBy7"; // Your webhook secret
+    const webhookSecret = "zncIffQV4BBNSDBpfS2IKBy7"; // Replace with environment variable in production
     const webhookBody = req.rawBody;
     const webhookSignature = req.headers["x-razorpay-signature"];
 
@@ -60,30 +87,39 @@ app.post("/razorpay-webhook", async (req, res) => {
     }
 
     try {
-        // Validate webhook signature using crypto
+        // Validate webhook signature using HMAC (SHA256)
         const expectedSignature = crypto
             .createHmac("sha256", webhookSecret)
             .update(webhookBody)
             .digest("hex");
 
-        if (expectedSignature === webhookSignature) {
-            const event = JSON.parse(webhookBody);
+        if (expectedSignature !== webhookSignature) {
+            return res.status(400).send("Invalid webhook signature");
+        }
 
-            switch (event.event) {
-                case "payment.captured":
-                    const paymentDetails = event.payload.payment.entity;
-                    const orderId = paymentDetails.order_id;
-                    const paymentId = paymentDetails.id;
+        const event = JSON.parse(webhookBody);
 
-                    const orderDetails = await prisma.temporaryOrder.findUnique({
-                        where: { order_id: orderId },
-                    });
+        switch (event.event) {
+            case "payment.captured":
+                const paymentDetails = event.payload.payment.entity;
+                const orderId = paymentDetails.order_id;
+                const paymentId = paymentDetails.id;
 
-                    if (!orderDetails) {
-                        return res.status(404).json({ error: "Temporary order not found" });
-                    }
+                // Fetch both types of temporary orders
+                const orderDetails = await prisma.temporaryOrder.findUnique({
+                    where: { order_id: orderId },
+                });
 
-                    // Move data to permanentOrder and delete from temporaryOrder
+                const sessionOrder = await prisma.sessionTempOrder.findUnique({
+                    where: { order_id: orderId },
+                });
+
+                if (!orderDetails && !sessionOrder) {
+                    return res.status(404).json({ error: "Order not found" });
+                }
+
+                if (orderDetails) {
+                    // Move regular order to permanent storage
                     await prisma.permanentOrder.create({
                         data: {
                             order_id: orderId,
@@ -94,28 +130,41 @@ app.post("/razorpay-webhook", async (req, res) => {
                         },
                     });
 
-
-
-
-
-                    
-
                     await prisma.temporaryOrder.delete({
                         where: { order_id: orderId },
                     });
 
-                    return res.status(200).json({ message: "Payment Verified" });
+                    return res.status(200).json({ message: "Payment verified for regular order" });
+                }
 
-                case "payment.failed":
-                    console.log("Payment failed:", event.payload.payment.entity);
-                    return res.status(200).send("Payment failed event logged");
+                if (sessionOrder) {
+                    // Move session order to permanent storage
+                    await prisma.sessionPermanentOrder.create({
+                        data: {
+                            order_id: orderId,
+                            payment_id: paymentId,
+                            name: sessionOrder.name,
+                            phoneNumber: sessionOrder.phoneNumber,
+                            email: sessionOrder.email,
+                            amount: sessionOrder.amount,
+                        },
+                    });
 
-                default:
-                    console.log("Unhandled event:", event.event);
-                    return res.status(200).send("Unhandled event");
-            }
-        } else {
-            return res.status(400).send("Invalid webhook signature");
+                    await prisma.sessionTempOrder.delete({
+                        where: { order_id: orderId },
+                    });
+
+                    return res.status(200).json({ message: "Payment verified for session order" });
+                }
+                break;
+
+            case "payment.failed":
+                console.log("Payment failed:", event.payload.payment.entity);
+                return res.status(200).send("Payment failed event logged");
+
+            default:
+                console.log("Unhandled event:", event.event);
+                return res.status(200).send("Unhandled event");
         }
     } catch (error) {
         console.error("Webhook processing error:", error);
@@ -124,6 +173,7 @@ app.post("/razorpay-webhook", async (req, res) => {
 });
 
 // Start the server
-app.listen(8001, () => {
-    console.log("Server started on port 8001");
+const PORT = 8001;
+app.listen(PORT, () => {
+    console.log(`Server started on port ${PORT}`);
 });

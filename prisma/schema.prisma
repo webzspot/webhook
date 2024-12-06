@@ -22,25 +22,27 @@ model TemporaryOrder {
 
 model PermanentOrder {
     permanent_order_id String @id @unique @default(cuid())
-    order_id String
+    order_id String @unique
     payment_id String
     name String
     phoneNumber String
     amount String
 }
-model TemporaryOrderSession {
-    temp_order_id String @id @unique() @default(cuid())
+model SessionTempOrder {
+   session_temp_order_id String @id @unique() @default(cuid())
     order_id String @unique
     name String
     phoneNumber String
     amount String
+    email String
 }
 
-model PermanentOrderSession {
-    permanent_order_id String @id @unique @default(cuid())
-    order_id String
+model SessionPermanentOrder {
+    session_permanent_order_id String @id @unique @default(cuid())
+    order_id String @unique
     payment_id String
     name String
+    email String
     phoneNumber String
     amount String
 }
