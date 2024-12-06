@@ -115,6 +115,7 @@ app.post("/razorpay-webhook", async (req, res) => {
                     });
 
                     if (!orderDetails && !sessionOrder) {
+                        console.error(`Order with ID ${orderId} not found`);
                         return res.status(404).json({ error: "Order not found" });
                     } else {
                         if (orderDetails) {
@@ -164,7 +165,7 @@ app.post("/razorpay-webhook", async (req, res) => {
 
                 case "payment.authorized":
                     console.log("Payment authorized:", event.payload.payment.entity);
-                    // Handle authorized payment logic, you might want to update the order status here.
+                    // You can add additional logic here to handle the authorized payment (e.g., verifying or notifying user)
                     return res.status(200).send("Payment authorized");
 
                 default:
