@@ -53,7 +53,7 @@ app.post("/session", async (req, res) => {
     try {
         const { name, phoneNumber, amount,email } = req.body;
 
-        const orders = await razorpay.orders.create({
+        const session = await razorpay.orders.create({
             amount: amount * 100, // Amount in paise
             currency: "INR",
         });
@@ -61,15 +61,15 @@ app.post("/session", async (req, res) => {
         // Store temporary order details
         await prisma.sessionTempOrder.create({
             data: {
-                order_id: orders.id,
+                order_id: session.id,
                 name,
                 phoneNumber,
                 email,
-                amount: (orders.amount / 100).toString(),
+                amount: (session.amount / 100).toString(),
             },
         });
 
-        res.status(200).json({ orders });
+        res.status(200).json({ session });
     } catch (error) {
         console.error("Error creating order:", error);
         res.status(500).json({ error: "Internal server error" });
@@ -174,6 +174,7 @@ app.post('/razorpay-webhook', async (req, res) => {
                                 name: sessionDetails.name,
                                 phoneNumber: sessionDetails.phoneNumber,
                                 amount: sessionDetails.amount,
+                                email:sessionDetails.email
                             },
                         });
     
