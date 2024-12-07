@@ -49,6 +49,32 @@ app.post("/order", async (req, res) => {
         res.status(500).json({ error: "Internal server error" });
     }
 });
+app.post("/session", async (req, res) => {
+    try {
+        const { name, phoneNumber, amount,email } = req.body;
+
+        const order = await razorpay.orders.create({
+            amount: amount * 100, // Amount in paise
+            currency: "INR",
+        });
+
+        // Store temporary order details
+        await prisma.sessionTempOrder.create({
+            data: {
+                order_id: order.id,
+                name,
+                phoneNumber,
+                email,
+                amount: (order.amount / 100).toString(),
+            },
+        });
+
+        res.status(200).json({ order });
+    } catch (error) {
+        console.error("Error creating order:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
 
 // Route to verify payment
 // app.post("/verify", async (req, res) => {
@@ -157,7 +183,7 @@ app.post('/razorpay-webhook', async (req, res) => {
                     }
 
 
-                    
+
 
                     const orderDetails = await prisma.temporaryOrder.findUnique({
                         where: { order_id: orderId },
