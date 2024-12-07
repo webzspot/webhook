@@ -154,15 +154,17 @@ app.post('/razorpay-webhook', async (req, res) => {
 
                     
 
+                    
+
+                    // if (!sessionDetails) {
+                    //     return res.status(404).json({ error: "Temporary order not found" });
+                    // }
+
                     const sessionDetails = await prisma.sessionTempOrder.findUnique({
                         where:{
                             order_id:orderId
                         }
                     })
-
-                    if (!sessionDetails) {
-                        return res.status(404).json({ error: "Temporary order not found" });
-                    }
                     
                     if(sessionDetails){
                         await prisma.SessionPermanentOrder.create({
@@ -183,7 +185,9 @@ app.post('/razorpay-webhook', async (req, res) => {
                     }
 
 
-
+                    // if (!orderDetails) {
+                    //     return res.status(404).json({ error: "Temporary order not found" });
+                    // }
 
                     const orderDetails = await prisma.temporaryOrder.findUnique({
                         where: { order_id: orderId },
@@ -198,11 +202,6 @@ app.post('/razorpay-webhook', async (req, res) => {
                     console.log("  !sessionDetails:",!sessionDetails)
                     console.log("  !orderDetails:",!orderDetails)
 
-
-                    if (!orderDetails) {
-                        return res.status(404).json({ error: "Temporary order not found" });
-                    }
-                   
 
                     if(orderDetails){
                         await prisma.permanentOrder.create({
