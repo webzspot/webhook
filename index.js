@@ -126,8 +126,7 @@ app.post('/razorpay-webhook', async (req, res) => {
                     const orderId = paymentDetails.order_id;
                     const paymentId = paymentDetails.id;
 
-                    console.log(" before sessionDetails:",sessionDetails)
-                    console.log(" before orderDetails:",orderDetails)
+                    
 
                     const sessionDetails = await prisma.sessionTempOrder.findUnique({
                         where:{
@@ -135,16 +134,20 @@ app.post('/razorpay-webhook', async (req, res) => {
                         }
                     })
                     
-                    console.log(" after orderDetails:",orderDetails)
+                    
 
                     const orderDetails = await prisma.temporaryOrder.findUnique({
                         where: { order_id: orderId },
                     });
 
-                    console.log(" after sessionDetails:",sessionDetails)
+                    console.log(" before sessionDetails:",sessionDetails)
+                    console.log(" before orderDetails:",orderDetails)
 
-                    console.log("  !sessionDetails:",sessionDetails)
-                    console.log("  !orderDetails:",orderDetails)
+                    console.log(" after sessionDetails:",sessionDetails)
+                    console.log(" after orderDetails:",orderDetails)
+                    
+                    console.log("  !sessionDetails:",!sessionDetails)
+                    console.log("  !orderDetails:",!orderDetails)
 
 
                     if (!orderDetails) {
