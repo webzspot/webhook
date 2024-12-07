@@ -61,11 +61,11 @@ app.post("/session", async (req, res) => {
         // Store temporary order details
         await prisma.sessionTempOrder.create({
             data: {
-                order_id: order.id,
+                order_id: orders.id,
                 name,
                 phoneNumber,
                 email,
-                amount: (order.amount / 100).toString(),
+                amount: (orders.amount / 100).toString(),
             },
         });
 
