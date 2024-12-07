@@ -37,6 +37,7 @@ model SessionTempOrder {
     email String
 }
 
+
 model SessionPermanentOrder {
     session_permanent_order_id String @id @unique @default(cuid())
     order_id String @unique
