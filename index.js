@@ -53,7 +53,7 @@ app.post("/session", async (req, res) => {
     try {
         const { name, phoneNumber, amount,email } = req.body;
 
-        const order = await razorpay.orders.create({
+        const orders = await razorpay.orders.create({
             amount: amount * 100, // Amount in paise
             currency: "INR",
         });
@@ -69,7 +69,7 @@ app.post("/session", async (req, res) => {
             },
         });
 
-        res.status(200).json({ order });
+        res.status(200).json({ orders });
     } catch (error) {
         console.error("Error creating order:", error);
         res.status(500).json({ error: "Internal server error" });
