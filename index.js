@@ -49,84 +49,8 @@ app.post("/order", async (req, res) => {
         res.status(500).json({ error: "Internal server error" });
     }
 });
-app.post("/session", async (req, res) => {
-    console.log(req.body)
-    try {
-        const { name, phoneNumber, amount, email } = req.body;
-
-        const session = await razorpay.orders.create({
-            amount: amount * 100, // Amount in paise
-            currency: "INR",
-        });
-        console.log(session)
-        // Store temporary order details
-        await prisma.sessionTempOrder.create({
-            data: {
-                order_id: session.id,
-                name,
-                phoneNumber,
-                email,
-                amount: (session.amount / 100).toString(),
-            },
-        });
-
-        res.status(200).json({ session });
-    } catch (error) {
-        console.error("Error creating order:", error);
-        res.status(500).json({ error: "Internal server error" });
-    }
-});
-
-// Route to verify payment
-// app.post("/verify", async (req, res) => {
-//     try {
-//         const { razorpayPaymentId, razorpayOrderId, signature } = req.body;
-//         const secret = "zncIffQV4BBNSDBpfS2IKBy7";
-
-//         const isVerified = validatePaymentVerification(
-//             { order_id: razorpayOrderId, payment_id: razorpayPaymentId },
-//             signature,
-//             secret
-//         );
-
-//         if (isVerified) {
-//             const orderDetails = await prisma.temporaryOrder.findUnique({
-//                 where: { order_id: razorpayOrderId },
-//             });
-
-//             if (!orderDetails) {
-//                 return res.status(400).json({ error: "Temporary order not found" });
-//             }
-
-//             // Move to permanent order and clean up temporary order
-//             await prisma.permanentOrder.create({
-//                 data: {
-//                     order_id: orderDetails.order_id,
-//                     payment_id: razorpayPaymentId,
-//                     name: orderDetails.name,
-//                     phoneNumber: orderDetails.phoneNumber,
-//                     amount: orderDetails.amount,
-//                 },
-//             });
-
-//             await prisma.temporaryOrder.delete({
-//                 where: { order_id: razorpayOrderId },
-//             });
-
-//             res.status(200).json({ message: "Payment Verified" });
-//         } else {
-//             res.status(400).json({ error: "Payment verification failed" });
-//         }
-//     } catch (error) {
-//         console.error("Error verifying payment:", error);
-//         res.status(500).json({ error: "Internal server error" });
-//     }
-// });
-
-// Webhook to handle Razorpay payment events
 
 
-// Webhook to handle Razorpay payment events
 app.post('/razorpay-webhook', async (req, res) => {
     const webhookBody = req.rawBody; // Use rawBody middleware to capture raw body
     const webhookSignature = req.headers['x-razorpay-signature'];
@@ -146,73 +70,36 @@ app.post('/razorpay-webhook', async (req, res) => {
 
         if (expectedSignature === webhookSignature) {
             const event = JSON.parse(webhookBody);
-
-            // if (!sessionDetails) {
-            //     return res.status(404).json({ error: "Temporary order not found" });
-            // }
+            
             switch (event.event) {
                 case 'payment.captured':
                     const paymentDetails = event.payload.payment.entity;
                     const orderId = paymentDetails.order_id;
                     const paymentId = paymentDetails.id;
 
-                    // Fetch the temporary session details first
-                    // Check in temporaryOrder
                     const orderDetails = await prisma.temporaryOrder.findUnique({
                         where: { order_id: orderId },
                     });
 
-                    if (orderDetails) {
-                        try {
-                            await prisma.permanentOrder.create({
-                                data: {
-                                    order_id: orderId,
-                                    payment_id: paymentId,
-                                    name: orderDetails.name,
-                                    phoneNumber: orderDetails.phoneNumber,
-                                    amount: orderDetails.amount,
-                                },
-                            });
-
-                            await prisma.temporaryOrder.delete({
-                                where: { order_id: orderId },
-                            });
-
-                            return res.status(200).json({ message: "Payment verified and permanent order created" });
-                        } catch (error) {
-                            console.error('Error migrating order:', error);
-                            return res.status(500).json({ error: "Error migrating order" });
-                        }
+                    if (!orderDetails) {
+                        return res.status(404).json({ error: "Temporary order not found" });
                     }
 
-                    // If session details aren't found, check for the temporary order directly
-                    const sessionDetails = await prisma.sessionTempOrder.findUnique({
+                    await prisma.permanentOrder.create({
+                        data: {
+                            order_id: orderId,
+                            payment_id: paymentId,
+                            name: orderDetails.name,
+                            phoneNumber: orderDetails.phoneNumber,
+                            amount: orderDetails.amount,
+                        },
+                    });
+
+                    await prisma.temporaryOrder.delete({
                         where: { order_id: orderId },
                     });
-    
-                    if (sessionDetails) {
-                        try {
-                            await prisma.SessionPermanentOrder.create({
-                                data: {
-                                    order_id: orderId,
-                                    payment_id: paymentId,
-                                    name: sessionDetails.name,
-                                    phoneNumber: sessionDetails.phoneNumber,
-                                    amount: sessionDetails.amount,
-                                    email: sessionDetails.email,
-                                },
-                            });
-    
-                            await prisma.temporaryOrder.delete({
-                                where: { order_id: orderId },
-                            });
-    
-                            return res.status(200).json({ message: "Payment verified and session migrated" });
-                        } catch (error) {
-                            console.error('Error migrating session:', error);
-                            return res.status(500).json({ error: "Error migrating session" });
-                        }
-                    }
+
+                    return res.status(200).json({ message: "Payment Verified" });
 
                 case 'payment.failed':
                     console.log('Payment failed:', event.payload.payment.entity);
