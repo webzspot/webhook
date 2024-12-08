@@ -138,6 +138,7 @@ app.post("/session", async (req, res) => {
 
             },
         });
+        console.log("Temporary session order created:", order.id);
 
         res.status(200).json({ order });
     } catch (error) {
@@ -155,6 +156,7 @@ app.post('/razorpay-webhook-session', async (req, res) => {
 
     if (!webhookBody) {
         console.error('Webhook body is empty or undefined');
+        console.log('Webhook body is empty or undefined')
         return res.status(400).send('Invalid request body');
     }
 
@@ -177,7 +179,7 @@ app.post('/razorpay-webhook-session', async (req, res) => {
                     const orderDetails = await prisma.sessionTempOrder.findUnique({
                         where: { order_id: orderId },
                     });
-
+console.log(orderDetails)
                     if (!orderDetails) {
                         return res.status(404).json({ error: "Temporary order not found" });
                     }
@@ -196,6 +198,7 @@ app.post('/razorpay-webhook-session', async (req, res) => {
                     await prisma.sessionTempOrder.delete({
                         where: { order_id: orderId },
                     });
+                    console.log("Session payment successfully verified and saved.");
 
                     return res.status(200).json({ message: "Payment Verified" });
 
